@@ -39,8 +39,11 @@ Upload 2–5 documents about the same batch or product (PDO certificates, lab re
 ### 2. Install
 
 ```bash
-npm install
+npm.cmd install
+npm.cmd run check:env
 ```
+
+If PowerShell blocks the `npm` shim on Windows, use `npm.cmd` for all commands.
 
 ### 3. Configure environment
 
@@ -58,7 +61,7 @@ OPENAI_API_KEY=sk-...
 ### 4. Initialize the database
 
 ```bash
-npx tsx scripts/setup-db.ts
+npm.cmd run setup:local
 ```
 
 This creates the `cases`, `documents`, `extracted_claims`, and `discrepancies` tables.
@@ -66,7 +69,7 @@ This creates the `cases`, `documents`, `extracted_claims`, and `discrepancies` t
 ### 5. Run locally
 
 ```bash
-npm run dev
+npm.cmd run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
