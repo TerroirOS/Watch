@@ -1,5 +1,4 @@
 import OpenAI from 'openai';
-import { shouldUseMockAi } from '@/lib/env';
 
 export interface ExtractionResult {
     summary: string;
@@ -15,6 +14,8 @@ export interface ExtractionResult {
     }[];
 }
 
+const USE_MOCK = !process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === '';
+
 function generateMockResult(documentTexts: string[]): ExtractionResult {
     // Extract some keywords from the document text for realistic-looking mock data
     const allText = documentTexts.join(' ').toLowerCase();
@@ -24,7 +25,7 @@ function generateMockResult(documentTexts: string[]): ExtractionResult {
     const productType = hasWine ? 'wine' : hasOil ? 'olive oil' : 'agricultural product';
 
     return {
-        summary: `[MOCK] Analysis of ${documentTexts.length} document(s) related to ${productType} origin claims. The documents contain various provenance assertions including producer identity, geographic origin, and production dates. This is a simulated analysis for local development - connect an OpenAI API key for real AI-powered extraction.`,
+        summary: `[MOCK] Analysis of ${documentTexts.length} document(s) related to ${productType} origin claims. The documents contain various provenance assertions including producer identity, geographic origin, and production dates. This is a simulated analysis for local development — connect an OpenAI API key for real AI-powered extraction.`,
         entities: [
             { claim_type: 'producer_name', claim_value: 'Example Producer Co.', confidence: 0.92 },
             { claim_type: 'pdo_region', claim_value: 'Kakheti, Georgia', confidence: 0.88 },
@@ -46,7 +47,7 @@ function generateMockResult(documentTexts: string[]): ExtractionResult {
             },
         ] : [
             {
-                title: 'Single document - no cross-reference possible',
+                title: 'Single document — no cross-reference possible',
                 description: 'Only one document was provided. Upload additional documents (certificates, labels, export records) to enable cross-document discrepancy detection.',
                 severity: 'low',
             },
@@ -55,8 +56,8 @@ function generateMockResult(documentTexts: string[]): ExtractionResult {
 }
 
 export async function processWatchCaseDocuments(documentTexts: string[]): Promise<ExtractionResult> {
-    if (shouldUseMockAi()) {
-        console.log('[Watch] No OPENAI_API_KEY set - using mock AI analysis');
+    if (USE_MOCK) {
+        console.log('[Watch] No OPENAI_API_KEY set — using mock AI analysis');
         // Simulate a short delay like a real API call
         await new Promise((r) => setTimeout(r, 800));
         return generateMockResult(documentTexts);
