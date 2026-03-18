@@ -1,8 +1,8 @@
 import Database from 'better-sqlite3';
-import path from 'path';
 import { randomUUID } from 'crypto';
+import { getWatchDbPath } from '@/lib/env';
 
-const DB_PATH = path.join(process.cwd(), 'watch.db');
+const DB_PATH = getWatchDbPath();
 
 const globalForDb = globalThis as unknown as {
     sqliteDb: Database.Database | undefined;

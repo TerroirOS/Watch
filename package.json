@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "check:env": "tsx scripts/check-env.ts",
+    "setup:db": "tsx scripts/setup-db.ts",
+    "setup:local": "npm run check:env && npm run setup:db"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

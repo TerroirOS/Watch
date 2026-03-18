@@ -1,30 +1,30 @@
 # TerroirOS Watch
 
-**An open-source AI transparency engine for agricultural origin claims.**
+**A local-first document review prototype for agricultural origin claims.**
 
-TerroirOS Watch helps journalists, watchdogs, cooperatives, and the public verify origin claims, understand certification decisions, and hold agricultural institutions accountable — by comparing documents, extracting structured claims, and explaining inconsistencies in plain language.
+This local checkout currently lives in the `Shield/` folder, but the app itself is the `TerroirOS/Watch` prototype: a single Next.js application with SQLite for local persistence and optional OpenAI-backed analysis. The instructions below describe the code that exists today.
 
 ---
 
 ## What it does
 
-Upload 2–5 documents about the same batch or product (PDO certificates, lab reports, export declarations, product labels) and Watch will:
+Upload 1-5 documents about the same batch or product and Watch will:
 
-1. Extract structured claims — producer name, PDO/GI region, harvest/bottling dates, varietal, batch identifiers
-2. Compare claims across all submitted documents
-3. Flag discrepancies with severity ratings (high / medium / low)
-4. Generate a plain-language AI summary of what the documents assert and where conflicts exist
-5. Produce a shareable Watch Report
+1. Extract structured origin-related claims from PDFs and JSON files
+2. Compare claims across submitted documents
+3. Flag discrepancies with severity ratings
+4. Generate a plain-language summary of the case
+5. Store the case locally for review in the dashboard
 
 ---
 
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router), TypeScript
-- **Database:** PostgreSQL (Neon / Supabase / local) with `pg`
-- **AI:** OpenAI `gpt-4o` for structured extraction and discrepancy analysis
-- **Document parsing:** `pdf-parse` for PDF text extraction
-- **Styling:** Custom CSS design system (warm cream palette, serif headings)
+- **Database:** SQLite via `better-sqlite3`
+- **AI:** OpenAI chat completions when configured, otherwise deterministic mock analysis
+- **Document parsing:** `pdf-parse`
+- **Styling:** Custom CSS
 
 ---
 
@@ -32,9 +32,9 @@ Upload 2–5 documents about the same batch or product (PDO certificates, lab re
 
 ### 1. Prerequisites
 
-- Node.js 18+
-- A PostgreSQL database (Neon serverless recommended for Vercel deploys)
-- An OpenAI API key
+- Node.js 20+
+- npm
+- An OpenAI API key only if you want live AI analysis
 
 ### 2. Install
 
@@ -42,26 +42,29 @@ Upload 2–5 documents about the same batch or product (PDO certificates, lab re
 npm install
 ```
 
+If PowerShell blocks the `npm` shim on Windows, use `npm.cmd` instead.
+
 ### 3. Configure environment
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local` and set:
+Edit `.env.local` as needed:
 
-```
-DATABASE_URL=postgres://...
+```bash
+WATCH_DB_PATH=watch.db
+WATCH_USE_MOCK_AI=true
 OPENAI_API_KEY=sk-...
 ```
 
-### 4. Initialize the database
+### 4. Validate environment and initialize the database
 
 ```bash
-npx tsx scripts/setup-db.ts
+npm run setup:local
 ```
 
-This creates the `cases`, `documents`, `extracted_claims`, and `discrepancies` tables.
+This runs the Day 1 bootstrap audit and creates the local SQLite schema in `WATCH_DB_PATH`.
 
 ### 5. Run locally
 
@@ -73,6 +76,15 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
+## Local Environment Contract
+
+- `WATCH_DB_PATH`: optional SQLite database path, defaults to `watch.db`
+- `WATCH_USE_MOCK_AI`: `true`, `false`, or empty for auto-detect
+- `OPENAI_API_KEY`: required only when mock mode is disabled
+- `npm run check:env`: validates Node version, dependency install state, env values, and local DB target
+
+---
+
 ## Routes
 
 | Route | Description |
@@ -80,9 +92,9 @@ Open [http://localhost:3000](http://localhost:3000).
 | `/` | Landing page |
 | `/cases` | All watch cases list |
 | `/cases/new` | Upload documents and open a new case |
-| `/cases/[id]` | Watch Report for a specific case |
+| `/cases/[id]` | Report for a specific case |
 | `/schema` | Public data model and discrepancy taxonomy docs |
-| `POST /api/cases/upload` | Create a case, process documents, run AI analysis |
+| `POST /api/cases/upload` | Create a case, process documents, run analysis |
 | `GET /api/cases` | JSON list of all cases |
 
 ---
@@ -98,26 +110,22 @@ discrepancies    (id, case_id, title, plain_language_summary, severity, created_
 
 ---
 
-## Deploying to Vercel
+## Deployment Notes
 
-1. Push the repo to GitHub.
-2. Create a new Vercel project from the repo.
-3. Add environment variables in Vercel dashboard: `DATABASE_URL` and `OPENAI_API_KEY`.
-4. Run the DB setup script once against your production database.
-5. Deploy.
+The current app is optimized for local development and demos. A hosted deployment still needs production-safe storage and persistence decisions for uploaded files before it is operationally ready.
 
 ---
 
 ## Part of TerroirOS
 
-TerroirOS Watch is the accountability and interpretation layer of the broader TerroirOS ecosystem:
+Watch sits alongside the broader TerroirOS ecosystem:
 
-- **Trace** — Creates trusted product passports and attestations
-- **Shield** — Adds climate-risk event tracking and payout transparency
-- **Watch** — Reads records, compares claims, flags inconsistencies, explains decisions in plain language
+- **Trace**: trusted product passports and attestations
+- **Shield**: climate-risk event tracking and payout transparency roadmap
+- **Watch**: record comparison, inconsistency detection, and operator-facing explanations
 
 ---
 
 ## License
 
-MIT — open-source and freely deployable.
+MIT

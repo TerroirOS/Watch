@@ -1,8 +1,12 @@
 import Database from 'better-sqlite3';
-import path from 'path';
 import { randomUUID } from 'crypto';
+import dotenv from 'dotenv';
+import path from 'path';
+import { getWatchDbPath } from '../lib/env';
 
-const DB_PATH = path.join(process.cwd(), 'watch.db');
+dotenv.config({ path: path.join(process.cwd(), '.env.local') });
+
+const DB_PATH = getWatchDbPath();
 
 function run() {
     console.log(`Setting up SQLite database at ${DB_PATH} ...`);
