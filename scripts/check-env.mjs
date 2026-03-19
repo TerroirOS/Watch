@@ -4,7 +4,7 @@ import path from 'path';
 const envFilePath = path.join(process.cwd(), '.env.local');
 const packageJsonPath = path.join(process.cwd(), 'package.json');
 const DEFAULT_DB_FILENAME = 'watch.db';
-const expectedDependencyNames = ['next', 'react', 'react-dom', 'better-sqlite3', 'openai', 'pdf-parse', 'tsx'];
+const expectedDependencyNames = ['next', 'react', 'react-dom', 'better-sqlite3', 'openai', 'pdf-parse', 'typescript'];
 
 function parseDotEnv(filePath) {
     if (!fs.existsSync(filePath)) {

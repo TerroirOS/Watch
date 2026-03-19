@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check:env": "node scripts/check-env.mjs",
-    "setup:db": "tsx scripts/setup-db.ts",
+    "setup:db": "node scripts/setup-db.mjs",
     "setup:local": "npm run check:env && npm run setup:db"
   },
   "dependencies": {
