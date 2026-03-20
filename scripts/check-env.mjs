@@ -1,119 +1,123 @@
-import fs from 'fs';
-import path from 'path';
+import fs from "fs";
+import path from "path";
+import { pathToFileURL } from "url";
+import {
+  DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
+  DEFAULT_MAX_DOCUMENTS,
+  DEFAULT_MAX_UPLOAD_BYTES,
+  parseDotEnv,
+  resolveWatchConfig,
+} from "./watch-config.mjs";
 
-const envFilePath = path.join(process.cwd(), '.env.local');
-const packageJsonPath = path.join(process.cwd(), 'package.json');
-const DEFAULT_DB_FILENAME = 'watch.db';
-const expectedDependencyNames = ['next', 'react', 'react-dom', 'better-sqlite3', 'openai', 'pdf-parse', 'typescript'];
+const expectedDependencyNames = [
+  "next",
+  "react",
+  "react-dom",
+  "better-sqlite3",
+  "openai",
+  "pdf-parse",
+  "typescript",
+];
 
-function parseDotEnv(filePath) {
-    if (!fs.existsSync(filePath)) {
-        return {};
-    }
+export function getInstalledDependencyVersion(name, cwd = process.cwd()) {
+  const dependencyPackageJsonPath = path.join(cwd, "node_modules", name, "package.json");
 
-    const values = {};
-    const lines = fs.readFileSync(filePath, 'utf-8').split(/\r?\n/);
+  if (!fs.existsSync(dependencyPackageJsonPath)) {
+    return null;
+  }
 
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) {
-            continue;
-        }
-
-        const separatorIndex = trimmed.indexOf('=');
-        if (separatorIndex === -1) {
-            continue;
-        }
-
-        const key = trimmed.slice(0, separatorIndex).trim();
-        const rawValue = trimmed.slice(separatorIndex + 1).trim();
-        values[key] = rawValue.replace(/^['"]|['"]$/g, '');
-    }
-
-    return values;
+  const dependencyPackageJson = JSON.parse(fs.readFileSync(dependencyPackageJsonPath, "utf-8"));
+  return dependencyPackageJson.version ?? "unknown";
 }
 
-function readStringEnv(name, fileValues) {
-    const processValue = process.env[name]?.trim();
-    if (processValue) {
-        return processValue;
-    }
+export function auditEnvironment({
+  cwd = process.cwd(),
+  env = process.env,
+  logger = console,
+} = {}) {
+  const envFilePath = path.join(cwd, ".env.local");
+  const packageJsonPath = path.join(cwd, "package.json");
+  const envFileValues = parseDotEnv(envFilePath);
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+  const nodeMajorVersion = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
+  const watchConfig = resolveWatchConfig({ cwd, env, fileValues: envFileValues });
 
-    const fileValue = fileValues[name]?.trim();
-    return fileValue ? fileValue : undefined;
+  logger.log("Terroir Watch local environment audit");
+  logger.log(`- .env.local present: ${fs.existsSync(envFilePath) ? "yes" : "no (using defaults)"}`);
+  logger.log(`- Node.js: ${process.versions.node}`);
+  logger.log(`- Persistence mode: ${watchConfig.persistenceMode}`);
+  if (watchConfig.persistenceMode === "postgres") {
+    logger.log(`- PostgreSQL URL configured: ${watchConfig.databaseUrl ? "yes" : "no"}`);
+  } else {
+    logger.log(
+      `- SQLite DB path: ${watchConfig.sqliteDbPath} (${watchConfig.configuredDbPath ? "WATCH_DB_PATH" : "default"})`,
+    );
+    logger.log(
+      `- SQLite DB directory present: ${fs.existsSync(path.dirname(watchConfig.sqliteDbPath)) ? "yes" : "no"}`,
+    );
+  }
+  logger.log(`- OpenAI API key configured: ${watchConfig.openAiApiKey ? "yes" : "no"}`);
+  logger.log(`- Mock AI mode: ${watchConfig.useMockAi ? "enabled" : "disabled"}`);
+  logger.log(`- OpenAI model: ${watchConfig.openAiModel}`);
+  logger.log(`- Upload storage directory: ${watchConfig.uploadDirectory}`);
+  logger.log(`- Upload public base path: ${watchConfig.uploadPublicBasePath}`);
+  logger.log(
+    `- Upload limits: ${watchConfig.maxDocuments} document(s) per case, ${watchConfig.maxUploadBytes} byte(s) per file`,
+  );
+  logger.log(
+    `- Allowed upload MIME types: ${watchConfig.allowedUploadMimeTypes.join(", ")}`,
+  );
+
+  logger.log("- Dependency validation:");
+  for (const dependencyName of expectedDependencyNames) {
+    const declaredVersion =
+      packageJson.dependencies?.[dependencyName] ??
+      packageJson.devDependencies?.[dependencyName] ??
+      "not declared";
+    const installedVersion = getInstalledDependencyVersion(dependencyName, cwd);
+    logger.log(
+      `  - ${dependencyName}: declared ${declaredVersion}; installed ${installedVersion ?? "missing"}`,
+    );
+  }
+
+  if (nodeMajorVersion < 20) {
+    throw new Error("Node.js 20 or newer is required.");
+  }
+
+  const missingDependencies = expectedDependencyNames.filter(
+    (dependencyName) => !getInstalledDependencyVersion(dependencyName, cwd),
+  );
+  if (missingDependencies.length > 0) {
+    throw new Error(
+      `Missing installed dependencies: ${missingDependencies.join(", ")}. Run npm.cmd install before continuing.`,
+    );
+  }
+
+  if (watchConfig.maxDocuments !== DEFAULT_MAX_DOCUMENTS) {
+    logger.log("- Custom document count limit active via WATCH_MAX_DOCUMENTS.");
+  }
+
+  if (watchConfig.maxUploadBytes !== DEFAULT_MAX_UPLOAD_BYTES) {
+    logger.log("- Custom upload byte limit active via WATCH_MAX_UPLOAD_BYTES.");
+  }
+
+  if (
+    watchConfig.allowedUploadMimeTypes.join(",") !==
+    DEFAULT_ALLOWED_UPLOAD_MIME_TYPES.join(",")
+  ) {
+    logger.log("- Custom MIME allowlist active via WATCH_ALLOWED_UPLOAD_MIME_TYPES.");
+  }
+
+  logger.log("Environment audit passed.");
 }
 
-function readBooleanEnv(name, fileValues) {
-    const value = readStringEnv(name, fileValues)?.toLowerCase();
-    if (value === 'true') {
-        return true;
-    }
+const isDirectRun = import.meta.url === pathToFileURL(process.argv[1] ?? "").href;
 
-    if (value === 'false') {
-        return false;
-    }
-
-    return undefined;
-}
-
-function getInstalledDependencyVersion(name) {
-    const dependencyPackageJsonPath = path.join(process.cwd(), 'node_modules', name, 'package.json');
-
-    if (!fs.existsSync(dependencyPackageJsonPath)) {
-        return null;
-    }
-
-    const dependencyPackageJson = JSON.parse(fs.readFileSync(dependencyPackageJsonPath, 'utf-8'));
-    return dependencyPackageJson.version ?? 'unknown';
-}
-
-const envFileValues = parseDotEnv(envFilePath);
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-const nodeMajorVersion = Number.parseInt(process.versions.node.split('.')[0] ?? '0', 10);
-const configuredDbPath = readStringEnv('WATCH_DB_PATH', envFileValues);
-const explicitMockAiMode = readBooleanEnv('WATCH_USE_MOCK_AI', envFileValues);
-const watchDbPath = configuredDbPath ? path.resolve(process.cwd(), configuredDbPath) : path.join(process.cwd(), DEFAULT_DB_FILENAME);
-const openAiConfigured = Boolean(readStringEnv('OPENAI_API_KEY', envFileValues));
-const mockAiEnabled = explicitMockAiMode !== undefined ? explicitMockAiMode : !openAiConfigured;
-const invalidBooleanEnvironmentVariables = ['WATCH_USE_MOCK_AI'].filter((name) => {
-    return readStringEnv(name, envFileValues) !== undefined && readBooleanEnv(name, envFileValues) === undefined;
-});
-const dbDirectory = path.dirname(watchDbPath);
-
-console.log('Terroir Watch local environment audit');
-console.log(`- .env.local present: ${fs.existsSync(envFilePath) ? 'yes' : 'no (using defaults)'}`);
-console.log(`- Node.js: ${process.versions.node}`);
-console.log(`- SQLite DB path: ${watchDbPath} (${configuredDbPath ? 'WATCH_DB_PATH' : 'default'})`);
-console.log(`- SQLite DB directory present: ${fs.existsSync(dbDirectory) ? 'yes' : 'no'}`);
-console.log(`- OpenAI API key configured: ${openAiConfigured ? 'yes' : 'no'}`);
-console.log(`- Mock AI mode: ${mockAiEnabled ? 'enabled' : 'disabled'} (${explicitMockAiMode === undefined ? 'auto' : 'WATCH_USE_MOCK_AI'})`);
-
-console.log('- Dependency validation:');
-for (const dependencyName of expectedDependencyNames) {
-    const declaredVersion = packageJson.dependencies?.[dependencyName] ?? packageJson.devDependencies?.[dependencyName] ?? 'not declared';
-    const installedVersion = getInstalledDependencyVersion(dependencyName);
-    console.log(`  - ${dependencyName}: declared ${declaredVersion}; installed ${installedVersion ?? 'missing'}`);
-}
-
-if (nodeMajorVersion < 20) {
-    console.error('Node.js 20 or newer is required.');
+if (isDirectRun) {
+  try {
+    auditEnvironment();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "Environment audit failed.");
     process.exit(1);
+  }
 }
-
-if (invalidBooleanEnvironmentVariables.length > 0) {
-    console.error(`Invalid boolean env value(s): ${invalidBooleanEnvironmentVariables.join(', ')}. Use true, false, or leave empty.`);
-    process.exit(1);
-}
-
-if (!openAiConfigured && !mockAiEnabled) {
-    console.error('OPENAI_API_KEY is required when WATCH_USE_MOCK_AI=false.');
-    process.exit(1);
-}
-
-const missingDependencies = expectedDependencyNames.filter((dependencyName) => !getInstalledDependencyVersion(dependencyName));
-if (missingDependencies.length > 0) {
-    console.error(`Missing installed dependencies: ${missingDependencies.join(', ')}. Run npm.cmd install before continuing.`);
-    process.exit(1);
-}
-
-console.log('Environment audit passed.');

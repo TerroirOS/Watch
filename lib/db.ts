@@ -1,89 +1,114 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import { randomUUID } from 'crypto';
+import Database from "better-sqlite3";
+import fs from "fs";
+import path from "path";
+import { randomUUID } from "crypto";
+import { Pool } from "pg";
+import { getWatchConfig } from "@/lib/env";
 
-const DB_PATH = path.join(process.cwd(), 'watch.db');
+type SqlValue = string | number | null | Uint8Array;
+type QueryRow = object;
 
-const globalForDb = globalThis as unknown as {
-    sqliteDb: Database.Database | undefined;
-};
-
-function getDb(): Database.Database {
-    if (!globalForDb.sqliteDb) {
-        globalForDb.sqliteDb = new Database(DB_PATH);
-        globalForDb.sqliteDb.pragma('journal_mode = WAL');
-        globalForDb.sqliteDb.pragma('foreign_keys = ON');
-
-        // Register a gen_random_uuid() SQL function so existing queries work
-        globalForDb.sqliteDb.function('gen_random_uuid', () => randomUUID());
-    }
-    return globalForDb.sqliteDb;
+interface QueryResult<TRow extends QueryRow> {
+  rows: TRow[];
 }
 
-/**
- * pg-compatible query adapter for SQLite.
- * Accepts $1, $2... style parameterized queries and returns { rows: [...] }.
- */
+const globalForDb = globalThis as unknown as {
+  sqliteDb: Database.Database | undefined;
+  postgresPool: Pool | undefined;
+};
+
+function getSqliteDb(): Database.Database {
+  const watchConfig = getWatchConfig();
+
+  if (!globalForDb.sqliteDb) {
+    fs.mkdirSync(path.dirname(watchConfig.sqliteDbPath), { recursive: true });
+    globalForDb.sqliteDb = new Database(watchConfig.sqliteDbPath);
+    globalForDb.sqliteDb.pragma("journal_mode = WAL");
+    globalForDb.sqliteDb.pragma("foreign_keys = ON");
+    globalForDb.sqliteDb.function("gen_random_uuid", () => randomUUID());
+  }
+
+  return globalForDb.sqliteDb;
+}
+
+function getPostgresPool(): Pool {
+  const watchConfig = getWatchConfig();
+
+  if (!watchConfig.databaseUrl) {
+    throw new Error("DATABASE_URL is required when WATCH_PERSISTENCE_MODE=postgres.");
+  }
+
+  if (!globalForDb.postgresPool) {
+    globalForDb.postgresPool = new Pool({
+      connectionString: watchConfig.databaseUrl,
+    });
+  }
+
+  return globalForDb.postgresPool;
+}
+
 export const db = {
-    query(sql: string, params?: any[]): { rows: any[] } {
-        const sqlite = getDb();
+  async query<TRow extends QueryRow = QueryRow>(
+    sql: string,
+    params: readonly SqlValue[] = [],
+  ): Promise<QueryResult<TRow>> {
+    const watchConfig = getWatchConfig();
 
-        // Convert pg-style $1, $2 placeholders to SQLite ? placeholders
-        let idx = 0;
-        const convertedSql = sql.replace(/\$\d+/g, () => {
-            idx++;
-            return '?';
-        });
+    if (watchConfig.persistenceMode === "postgres") {
+      const result = await getPostgresPool().query<TRow>(
+        sql,
+        params as (string | number | null)[],
+      );
+      return { rows: result.rows };
+    }
 
-        const trimmed = convertedSql.trim().toUpperCase();
-        const isSelect = trimmed.startsWith('SELECT');
-        const hasReturning = trimmed.includes('RETURNING');
+    const sqlite = getSqliteDb();
+    const convertedSql = sql.replace(/\$\d+/g, "?");
+    const trimmed = convertedSql.trim().toUpperCase();
+    const isSelect = trimmed.startsWith("SELECT");
+    const hasReturning = trimmed.includes("RETURNING");
 
-        if (isSelect) {
-            const rows = sqlite.prepare(convertedSql).all(...(params || []));
-            return { rows };
+    if (isSelect) {
+      const rows = sqlite.prepare(convertedSql).all(...params) as TRow[];
+      return { rows };
+    }
+
+    if (hasReturning) {
+      const returningMatch = convertedSql.match(/RETURNING\s+(.+)$/i);
+      const returningCols = returningMatch ? returningMatch[1].trim() : "id";
+      const baseSql = convertedSql.replace(/\s+RETURNING\s+.+$/i, "").trim();
+
+      if (trimmed.startsWith("INSERT")) {
+        const result = sqlite.prepare(baseSql).run(...params);
+        const lastId = result.lastInsertRowid;
+        const tableMatch = baseSql.match(/INSERT\s+INTO\s+(\w+)/i);
+        const table = tableMatch ? tableMatch[1] : "";
+        const row = sqlite
+          .prepare(`SELECT ${returningCols} FROM ${table} WHERE rowid = ?`)
+          .get(lastId) as TRow | undefined;
+
+        return { rows: row ? [row] : [] };
+      }
+
+      if (trimmed.startsWith("UPDATE")) {
+        const tableMatch = baseSql.match(/UPDATE\s+(\w+)/i);
+        const table = tableMatch ? tableMatch[1] : "";
+        const whereMatch = baseSql.match(/WHERE\s+(.+)$/i);
+
+        sqlite.prepare(baseSql).run(...params);
+
+        if (whereMatch) {
+          const whereClause = whereMatch[1];
+          const row = sqlite
+            .prepare(`SELECT ${returningCols} FROM ${table} WHERE ${whereClause}`)
+            .get(params.at(-1)) as TRow | undefined;
+
+          return { rows: row ? [row] : [] };
         }
+      }
+    }
 
-        if (hasReturning) {
-            // SQLite doesn't support RETURNING natively — split into exec + select
-            const returningMatch = convertedSql.match(/RETURNING\s+(.+)$/i);
-            const returningCols = returningMatch ? returningMatch[1].trim() : 'id';
-            const baseSql = convertedSql.replace(/\s+RETURNING\s+.+$/i, '').trim();
-
-            if (trimmed.startsWith('INSERT')) {
-                const stmt = sqlite.prepare(baseSql);
-                const result = stmt.run(...(params || []));
-                const lastId = result.lastInsertRowid;
-
-                // Determine table name from INSERT INTO <table>
-                const tableMatch = baseSql.match(/INSERT\s+INTO\s+(\w+)/i);
-                const table = tableMatch ? tableMatch[1] : '';
-
-                const row = sqlite.prepare(`SELECT ${returningCols} FROM ${table} WHERE rowid = ?`).get(lastId);
-                return { rows: row ? [row] : [] };
-            } else if (trimmed.startsWith('UPDATE')) {
-                // For UPDATE...RETURNING, capture affected rows via changes()
-                const tableMatch = baseSql.match(/UPDATE\s+(\w+)/i);
-                const table = tableMatch ? tableMatch[1] : '';
-                const whereMatch = baseSql.match(/WHERE\s+(.+)$/i);
-
-                sqlite.prepare(baseSql).run(...(params || []));
-
-                if (whereMatch) {
-                    const whereClause = whereMatch[1];
-                    // Re-use same params that come after SET clause params for WHERE
-                    const selectSql = `SELECT ${returningCols} FROM ${table} WHERE ${whereClause}`;
-                    // Estimate which params belong to WHERE — this is tricky;
-                    // for our simple UPDATE...WHERE id=$N case, take the last param
-                    const row = sqlite.prepare(selectSql).get(params?.[params.length - 1]);
-                    return { rows: row ? [row] : [] };
-                }
-                return { rows: [] };
-            }
-        }
-
-        // Plain INSERT / UPDATE / DELETE without RETURNING
-        sqlite.prepare(convertedSql).run(...(params || []));
-        return { rows: [] };
-    },
+    sqlite.prepare(convertedSql).run(...params);
+    return { rows: [] };
+  },
 };

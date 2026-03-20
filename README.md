@@ -55,13 +55,24 @@ copy .env.local.example .env.local
 Edit `.env.local` and set the values you need:
 
 ```dotenv
-OPENAI_API_KEY=sk-...
+WATCH_PERSISTENCE_MODE=sqlite
 WATCH_DB_PATH=./watch.db
+DATABASE_URL=
+OPENAI_API_KEY=sk-...
 WATCH_USE_MOCK_AI=true
+WATCH_OPENAI_MODEL=gpt-4o
+WATCH_UPLOAD_DIR=./uploads
+WATCH_UPLOAD_PUBLIC_BASE=/uploads
+WATCH_MAX_DOCUMENTS=5
+WATCH_MAX_UPLOAD_BYTES=10485760
+WATCH_ALLOWED_UPLOAD_MIME_TYPES=application/pdf,application/json
 ```
 
+`WATCH_PERSISTENCE_MODE` defaults to `sqlite`. Set it to `postgres` only when `DATABASE_URL` is configured.
 `OPENAI_API_KEY` is optional when `WATCH_USE_MOCK_AI=true` or omitted.
 `WATCH_DB_PATH` defaults to `./watch.db`.
+`WATCH_MAX_DOCUMENTS` defaults to 5 and `WATCH_MAX_UPLOAD_BYTES` defaults to 10 MB per file.
+`WATCH_ALLOWED_UPLOAD_MIME_TYPES` defaults to PDFs and JSON records.
 
 ### 4. Initialize the local database
 
@@ -69,7 +80,7 @@ WATCH_USE_MOCK_AI=true
 npm.cmd run setup:local
 ```
 
-This creates the `cases`, `documents`, `extracted_claims`, and `discrepancies` tables in the configured SQLite database.
+This creates the `cases`, `documents`, `extracted_claims`, and `discrepancies` tables in the configured SQLite or PostgreSQL database.
 
 ### 5. Run locally
 
