@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFParse } from "pdf-parse";
 import { db } from "@/lib/db";
+import { extractDocumentText, normalizeMimeType } from "@/lib/document-parsing.mjs";
 import { getWatchConfig } from "@/lib/env";
 import { processWatchCaseDocuments } from "@/lib/openai";
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const documentIds: string[] = [];
 
     for (const file of files) {
-      const normalizedMimeType = file.type.toLowerCase();
+      const normalizedMimeType = normalizeMimeType(file.type);
       if (!watchConfig.allowedUploadMimeTypes.includes(normalizedMimeType)) {
         return NextResponse.json(
           {
@@ -70,26 +70,22 @@ export async function POST(req: NextRequest) {
       }
 
       const buffer = Buffer.from(await file.arrayBuffer());
-      let extractedText = "";
+      const parsedDocument = await extractDocumentText({
+        buffer,
+        mimeType: normalizedMimeType,
+        filename: file.name,
+      });
 
-      if (normalizedMimeType === "application/pdf") {
-        const parser = new PDFParse({ data: buffer });
-        const result = await parser.getText();
-        extractedText = result.text;
-      } else if (normalizedMimeType === "application/json") {
-        extractedText = buffer.toString("utf-8");
-      }
-
-      documentTexts.push(extractedText);
+      documentTexts.push(parsedDocument.extractedText);
 
       const docResult = await db.query<InsertedIdRow>(
         "INSERT INTO documents (case_id, filename, file_url, file_type, extracted_text) VALUES ($1, $2, $3, $4, $5) RETURNING id",
         [
           caseId,
-          file.name,
-          `${watchConfig.uploadPublicBasePath}/${encodeURIComponent(caseId)}/${encodeURIComponent(file.name)}`,
-          file.type,
-          extractedText,
+          parsedDocument.filename,
+          `${watchConfig.uploadPublicBasePath}/${encodeURIComponent(caseId)}/${encodeURIComponent(parsedDocument.filename)}`,
+          parsedDocument.mimeType,
+          parsedDocument.extractedText,
         ],
       );
       const documentId = docResult.rows[0]?.id;

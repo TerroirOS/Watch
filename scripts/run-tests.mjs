@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  jsonDocumentToText,
+  normalizeDocumentFilename,
+  normalizeDocumentText,
+} from "../lib/document-parsing.mjs";
 import { auditEnvironment } from "./check-env.mjs";
 import { resolveWatchConfig } from "./watch-config.mjs";
 
@@ -103,6 +108,30 @@ runTest("watch config parses upload limits and MIME types", () => {
   assert.equal(config.maxDocuments, 3);
   assert.equal(config.maxUploadBytes, 2048);
   assert.deepEqual(config.allowedUploadMimeTypes, ["application/pdf", "text/plain"]);
+});
+
+runTest("document parsing normalizes filenames and whitespace", () => {
+  assert.equal(normalizeDocumentFilename(" ..\\Batch 42?.json "), "Batch 42-.json");
+  assert.equal(normalizeDocumentText(" line one\r\n\r\n\r\nline\t\t two "), "line one\n\nline two");
+});
+
+runTest("document parsing converts JSON fixtures into searchable text", () => {
+  const certificateFixture = fs.readFileSync(
+    path.join(process.cwd(), "test-docs", "certificate.json"),
+    "utf-8",
+  );
+  const exportFixture = fs.readFileSync(
+    path.join(process.cwd(), "test-docs", "export-declaration.json"),
+    "utf-8",
+  );
+
+  const certificateText = jsonDocumentToText(certificateFixture);
+  const exportText = jsonDocumentToText(exportFixture);
+
+  assert.match(certificateText, /document_type: PDO Certificate/);
+  assert.match(certificateText, /certification_number: GEO-PDO-2024-1187/);
+  assert.match(exportText, /origin_region: Kakheti, Georgia/);
+  assert.match(exportText, /batch_id: BATCH-2024-0042/);
 });
 
 if (process.exitCode) {
