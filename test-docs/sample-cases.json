@@ -1,0 +1,12 @@
+[
+  {
+    "title": "Marani Cross-Document Export Review",
+    "description": "Seeded sample case combining the PDO certificate and export declaration to demonstrate discrepancy detection.",
+    "documents": ["certificate.json", "export-declaration.json"]
+  },
+  {
+    "title": "Marani Certificate Baseline Review",
+    "description": "Seeded sample case using only the PDO certificate to show single-document extraction behavior.",
+    "documents": ["certificate.json"]
+  }
+]

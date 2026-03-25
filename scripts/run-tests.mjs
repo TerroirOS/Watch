@@ -134,6 +134,30 @@ runTest("document parsing converts JSON fixtures into searchable text", () => {
   assert.match(exportText, /batch_id: BATCH-2024-0042/);
 });
 
+runTest("sample case fixtures reference real test documents", () => {
+  const sampleCases = JSON.parse(
+    fs.readFileSync(path.join(process.cwd(), "test-docs", "sample-cases.json"), "utf-8"),
+  );
+
+  assert(Array.isArray(sampleCases));
+  assert(sampleCases.length >= 1);
+
+  for (const sampleCase of sampleCases) {
+    assert.equal(typeof sampleCase.title, "string");
+    assert.equal(typeof sampleCase.description, "string");
+    assert(Array.isArray(sampleCase.documents));
+    assert(sampleCase.documents.length >= 1);
+
+    for (const fixtureName of sampleCase.documents) {
+      assert.equal(typeof fixtureName, "string");
+      assert(
+        fs.existsSync(path.join(process.cwd(), "test-docs", fixtureName)),
+        `Missing fixture referenced by sample seed: ${fixtureName}`,
+      );
+    }
+  }
+});
+
 if (process.exitCode) {
   process.exit(process.exitCode);
 }
