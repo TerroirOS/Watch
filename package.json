@@ -1,5 +1,5 @@
 {
-  "name": "terroiros-watch",
+  "name": "terroiros-shield",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,9 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node scripts/run-tests.mjs",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit",
     "check:env": "node scripts/check-env.mjs",
     "setup:db": "node scripts/setup-db.mjs",
-    "setup:local": "npm run check:env && npm run setup:db"
+    "setup:local": "npm run check:env && npm run setup:db",
+    "seed:sample": "node scripts/seed-sample-cases.mjs",
+    "setup:demo": "npm run setup:local && npm run seed:sample",
+    "compose:config": "docker compose config"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",

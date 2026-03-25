@@ -82,7 +82,15 @@ npm.cmd run setup:local
 
 This creates the `cases`, `documents`, `extracted_claims`, and `discrepancies` tables in the configured SQLite or PostgreSQL database.
 
-### 5. Run locally
+### 5. Load seeded demo cases
+
+```bash
+npm.cmd run setup:demo
+```
+
+This runs the local environment checks, creates the schema, and reseeds the bundled sample cases so the dashboard always starts from a clean, deterministic demo dataset.
+
+### 6. Run locally
 
 ```bash
 npm.cmd run dev
