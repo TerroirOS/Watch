@@ -21,7 +21,7 @@ Upload 2-5 documents about the same batch or product and Watch will:
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router), TypeScript
-- **Database:** SQLite by default via `better-sqlite3` with a PostgreSQL-style query adapter
+- **Database:** SQLite as the canonical default via `better-sqlite3`, with explicit PostgreSQL opt-in for deployments
 - **AI:** OpenAI with a local mock fallback when `OPENAI_API_KEY` is not configured
 - **Document parsing:** `pdf-parse` for PDF text extraction
 - **Styling:** Custom CSS design system
@@ -68,7 +68,7 @@ WATCH_MAX_UPLOAD_BYTES=10485760
 WATCH_ALLOWED_UPLOAD_MIME_TYPES=application/pdf,application/json
 ```
 
-`WATCH_PERSISTENCE_MODE` defaults to `sqlite`. Set it to `postgres` only when `DATABASE_URL` is configured.
+`WATCH_PERSISTENCE_MODE` defaults to `sqlite` even when `DATABASE_URL` is present. Set it to `postgres` explicitly only when you want the app to use PostgreSQL.
 `OPENAI_API_KEY` is optional when `WATCH_USE_MOCK_AI=true` or omitted.
 `WATCH_DB_PATH` defaults to `./watch.db`.
 `WATCH_MAX_DOCUMENTS` defaults to 5 and `WATCH_MAX_UPLOAD_BYTES` defaults to 10 MB per file.

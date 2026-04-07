@@ -10,6 +10,7 @@ const DEFAULT_OPENAI_MODEL = "gpt-4o";
 const WATCH_PERSISTENCE_MODES = ["sqlite", "postgres"] as const;
 
 type WatchPersistenceMode = (typeof WATCH_PERSISTENCE_MODES)[number];
+type WatchPersistenceModeSource = "default" | "explicit";
 
 function readStringEnv(name: string, env = process.env): string | undefined {
   const value = env[name]?.trim();
@@ -44,6 +45,7 @@ function readIntegerEnv(name: string, env = process.env): number | undefined {
 
 export interface WatchConfig {
   persistenceMode: WatchPersistenceMode;
+  persistenceModeSource: WatchPersistenceModeSource;
   databaseUrl?: string;
   sqliteDbPath: string;
   useMockAi: boolean;
@@ -67,9 +69,7 @@ export function getWatchConfig(env = process.env): WatchConfig {
 
   const persistenceModeValue = readStringEnv("WATCH_PERSISTENCE_MODE", env);
   const databaseUrl = readStringEnv("DATABASE_URL", env);
-  const persistenceMode = (persistenceModeValue ?? (databaseUrl ? "postgres" : "sqlite")) as
-    | WatchPersistenceMode
-    | string;
+  const persistenceMode = (persistenceModeValue ?? "sqlite") as WatchPersistenceMode | string;
 
   if (!WATCH_PERSISTENCE_MODES.includes(persistenceMode as WatchPersistenceMode)) {
     throw new Error(
@@ -121,6 +121,7 @@ export function getWatchConfig(env = process.env): WatchConfig {
 
   const config: WatchConfig = {
     persistenceMode: persistenceMode as WatchPersistenceMode,
+    persistenceModeSource: persistenceModeValue ? "explicit" : "default",
     databaseUrl,
     sqliteDbPath: path.resolve(
       process.cwd(),

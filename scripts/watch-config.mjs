@@ -81,7 +81,7 @@ export function resolveWatchConfig({
   const envFileValues = fileValues ?? parseDotEnv(path.join(cwd, ".env.local"));
   const persistenceModeValue = readStringEnv("WATCH_PERSISTENCE_MODE", envFileValues, env);
   const databaseUrl = readStringEnv("DATABASE_URL", envFileValues, env);
-  const persistenceMode = persistenceModeValue ?? (databaseUrl ? "postgres" : "sqlite");
+  const persistenceMode = persistenceModeValue ?? "sqlite";
 
   if (!WATCH_PERSISTENCE_MODES.includes(persistenceMode)) {
     throw new Error(
@@ -171,6 +171,7 @@ export function resolveWatchConfig({
   return {
     envFileValues,
     persistenceMode,
+    persistenceModeSource: persistenceModeValue ? "explicit" : "default",
     databaseUrl,
     sqliteDbPath,
     configuredDbPath,

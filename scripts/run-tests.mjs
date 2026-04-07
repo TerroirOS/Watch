@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import Database from "better-sqlite3";
 import {
   jsonDocumentToText,
   normalizeDocumentFilename,
   normalizeDocumentText,
 } from "../lib/document-parsing.mjs";
 import { auditEnvironment } from "./check-env.mjs";
+import {
+  applySqliteMigrations,
+  getLatestSchemaVersion,
+  getPendingSqliteMigrations,
+} from "./watch-migrations.mjs";
 import { resolveWatchConfig } from "./watch-config.mjs";
 
 const requiredDependencies = [
@@ -94,6 +101,70 @@ runTest("check-env fails when postgres mode is enabled without a connection stri
   );
 });
 
+runTest("watch config keeps sqlite as the canonical default mode", () => {
+  const workspace = createFixtureWorkspace();
+  const config = resolveWatchConfig({
+    cwd: workspace,
+    env: {
+      DATABASE_URL: "postgres://watch:secret@localhost:5432/watch",
+    },
+  });
+
+  assert.equal(config.persistenceMode, "sqlite");
+  assert.equal(config.persistenceModeSource, "default");
+});
+
+runTest("sqlite migrations create schema metadata and are idempotent", () => {
+  const workspace = createFixtureWorkspace();
+  const dbPath = path.join(workspace, "watch.db");
+  const db = new Database(dbPath);
+  db.function("gen_random_uuid", () => "00000000-0000-4000-8000-000000000000");
+
+  const firstRun = applySqliteMigrations({ db, logger: { log() {} } });
+  const secondRun = applySqliteMigrations({ db, logger: { log() {} } });
+  const migrationRows = db
+    .prepare("SELECT version, name FROM watch_schema_migrations ORDER BY version ASC")
+    .all();
+
+  assert.equal(firstRun.latestVersion, getLatestSchemaVersion());
+  assert.equal(secondRun.latestVersion, getLatestSchemaVersion());
+  assert.deepEqual(firstRun.appliedVersions, [1]);
+  assert.deepEqual(secondRun.appliedVersions, [1]);
+  assert.deepEqual(migrationRows, [{ version: 1, name: "initial_watch_schema" }]);
+  assert.equal(
+    db.prepare(
+      "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'cases'",
+    ).get().count,
+    1,
+  );
+
+  db.close();
+});
+
+runTest("sqlite migrations baseline an existing pre-migration schema", () => {
+  const workspace = createFixtureWorkspace();
+  const dbPath = path.join(workspace, "legacy-watch.db");
+  const db = new Database(dbPath);
+  db.function("gen_random_uuid", () => "00000000-0000-4000-8000-000000000000");
+  db.exec(`
+    CREATE TABLE cases (id TEXT PRIMARY KEY, title TEXT NOT NULL);
+    CREATE TABLE documents (id TEXT PRIMARY KEY, case_id TEXT, filename TEXT NOT NULL, file_url TEXT NOT NULL);
+    CREATE TABLE extracted_claims (id TEXT PRIMARY KEY, case_id TEXT, document_id TEXT, claim_type TEXT NOT NULL, claim_value TEXT NOT NULL);
+    CREATE TABLE discrepancies (id TEXT PRIMARY KEY, case_id TEXT, title TEXT NOT NULL, plain_language_summary TEXT NOT NULL);
+  `);
+
+  const result = applySqliteMigrations({ db, logger: { log() {} } });
+  const migrationRows = db
+    .prepare("SELECT version, name FROM watch_schema_migrations ORDER BY version ASC")
+    .all();
+
+  assert.equal(result.latestVersion, getLatestSchemaVersion());
+  assert.deepEqual(result.appliedVersions, [1]);
+  assert.deepEqual(migrationRows, [{ version: 1, name: "initial_watch_schema" }]);
+
+  db.close();
+});
+
 runTest("watch config parses upload limits and MIME types", () => {
   const workspace = createFixtureWorkspace();
   const config = resolveWatchConfig({
@@ -158,6 +229,66 @@ runTest("sample case fixtures reference real test documents", () => {
   }
 });
 
+runTest("sqlite migrations are versioned and idempotent", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "watch-migrations-"));
+  const sqliteDbPath = path.join(workspace, "watch.db");
+  const db = new Database(sqliteDbPath);
+  db.function("gen_random_uuid", () => "test-uuid");
+
+  try {
+    const firstRun = applySqliteMigrations({
+      db,
+      logger: { log() {} },
+    });
+    assert.equal(firstRun.pendingCount, getLatestSchemaVersion());
+    assert.equal(firstRun.latestVersion, getLatestSchemaVersion());
+    assert.deepEqual(
+      firstRun.appliedMigrations.map((migration) => migration.version),
+      [1],
+    );
+
+    const secondRun = applySqliteMigrations({
+      db,
+      logger: { log() {} },
+    });
+    assert.equal(secondRun.pendingCount, 0);
+    assert.equal(secondRun.latestVersion, getLatestSchemaVersion());
+
+    const pendingMigrations = getPendingSqliteMigrations({ db });
+    assert.equal(pendingMigrations.length, 0);
+  } finally {
+    db.close();
+  }
+});
+
 if (process.exitCode) {
   process.exit(process.exitCode);
+}
+
+const apiRouteTests = spawnSync(
+  process.execPath,
+  ["--import", "tsx", path.join(process.cwd(), "scripts", "api-route-tests.ts")],
+  {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: "utf-8",
+  },
+);
+
+const apiRouteTestsOutput = [apiRouteTests.stdout, apiRouteTests.stderr].filter(Boolean).join("");
+
+if (apiRouteTestsOutput) {
+  process.stdout.write(apiRouteTestsOutput);
+}
+
+if (
+  apiRouteTests.error?.code === "EPERM" ||
+  apiRouteTests.stderr?.includes("Error: spawn EPERM")
+) {
+  console.warn("SKIP api route tests (subprocess spawn is blocked with EPERM in this environment)");
+  process.exit(process.exitCode ?? 0);
+}
+
+if (apiRouteTests.status !== 0) {
+  process.exit(apiRouteTests.status ?? 1);
 }

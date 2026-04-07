@@ -46,6 +46,7 @@ export function auditEnvironment({
   logger.log(`- .env.local present: ${fs.existsSync(envFilePath) ? "yes" : "no (using defaults)"}`);
   logger.log(`- Node.js: ${process.versions.node}`);
   logger.log(`- Persistence mode: ${watchConfig.persistenceMode}`);
+  logger.log(`- Persistence selection: ${watchConfig.persistenceModeSource}`);
   if (watchConfig.persistenceMode === "postgres") {
     logger.log(`- PostgreSQL URL configured: ${watchConfig.databaseUrl ? "yes" : "no"}`);
   } else {
@@ -55,6 +56,11 @@ export function auditEnvironment({
     logger.log(
       `- SQLite DB directory present: ${fs.existsSync(path.dirname(watchConfig.sqliteDbPath)) ? "yes" : "no"}`,
     );
+    if (watchConfig.databaseUrl && watchConfig.persistenceModeSource !== "explicit") {
+      logger.log(
+        "- DATABASE_URL is set but ignored until WATCH_PERSISTENCE_MODE=postgres is configured explicitly.",
+      );
+    }
   }
   logger.log(`- OpenAI API key configured: ${watchConfig.openAiApiKey ? "yes" : "no"}`);
   logger.log(`- Mock AI mode: ${watchConfig.useMockAi ? "enabled" : "disabled"}`);
