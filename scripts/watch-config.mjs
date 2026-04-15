@@ -4,11 +4,14 @@ import path from "path";
 export const DEFAULT_SQLITE_DB_FILENAME = "watch.db";
 export const DEFAULT_UPLOAD_DIRECTORY = "uploads";
 export const DEFAULT_PUBLIC_UPLOAD_PATH = "/uploads";
+export const DEFAULT_FILE_STORAGE = "local";
 export const DEFAULT_MAX_DOCUMENTS = 5;
 export const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const DEFAULT_MAX_CASE_UPLOAD_BYTES = 25 * 1024 * 1024;
 export const DEFAULT_ALLOWED_UPLOAD_MIME_TYPES = ["application/pdf", "application/json"];
 export const DEFAULT_OPENAI_MODEL = "gpt-4o";
 export const WATCH_PERSISTENCE_MODES = ["sqlite", "postgres"];
+export const WATCH_FILE_STORAGE_MODES = ["local"];
 
 export function parseDotEnv(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -82,10 +85,18 @@ export function resolveWatchConfig({
   const persistenceModeValue = readStringEnv("WATCH_PERSISTENCE_MODE", envFileValues, env);
   const databaseUrl = readStringEnv("DATABASE_URL", envFileValues, env);
   const persistenceMode = persistenceModeValue ?? "sqlite";
+  const fileStorageModeValue = readStringEnv("WATCH_FILE_STORAGE", envFileValues, env);
+  const fileStorageMode = fileStorageModeValue ?? DEFAULT_FILE_STORAGE;
 
   if (!WATCH_PERSISTENCE_MODES.includes(persistenceMode)) {
     throw new Error(
       `WATCH_PERSISTENCE_MODE must be one of: ${WATCH_PERSISTENCE_MODES.join(", ")}.`,
+    );
+  }
+
+  if (!WATCH_FILE_STORAGE_MODES.includes(fileStorageMode)) {
+    throw new Error(
+      `WATCH_FILE_STORAGE must be one of: ${WATCH_FILE_STORAGE_MODES.join(", ")}.`,
     );
   }
 
@@ -109,6 +120,7 @@ export function resolveWatchConfig({
     readStringEnv("WATCH_UPLOAD_PUBLIC_BASE", envFileValues, env) ?? DEFAULT_PUBLIC_UPLOAD_PATH;
   const maxDocuments = readIntegerEnv("WATCH_MAX_DOCUMENTS", envFileValues, env);
   const maxUploadBytes = readIntegerEnv("WATCH_MAX_UPLOAD_BYTES", envFileValues, env);
+  const maxCaseUploadBytes = readIntegerEnv("WATCH_MAX_CASE_UPLOAD_BYTES", envFileValues, env);
   const allowedUploadMimeTypesValue = readStringEnv(
     "WATCH_ALLOWED_UPLOAD_MIME_TYPES",
     envFileValues,
@@ -129,6 +141,7 @@ export function resolveWatchConfig({
   const invalidIntegerEnvironmentVariables = [
     "WATCH_MAX_DOCUMENTS",
     "WATCH_MAX_UPLOAD_BYTES",
+    "WATCH_MAX_CASE_UPLOAD_BYTES",
   ].filter((name) => {
     return (
       readStringEnv(name, envFileValues, env) !== undefined &&
@@ -160,6 +173,10 @@ export function resolveWatchConfig({
     throw new Error("WATCH_MAX_UPLOAD_BYTES must be at least 1.");
   }
 
+  if (maxCaseUploadBytes !== undefined && maxCaseUploadBytes < 1) {
+    throw new Error("WATCH_MAX_CASE_UPLOAD_BYTES must be at least 1.");
+  }
+
   if (!uploadPublicBasePath.startsWith("/")) {
     throw new Error("WATCH_UPLOAD_PUBLIC_BASE must start with '/'.");
   }
@@ -168,10 +185,20 @@ export function resolveWatchConfig({
     throw new Error("WATCH_ALLOWED_UPLOAD_MIME_TYPES must contain at least one MIME type.");
   }
 
+  const resolvedMaxUploadBytes = maxUploadBytes ?? DEFAULT_MAX_UPLOAD_BYTES;
+  const resolvedMaxCaseUploadBytes = maxCaseUploadBytes ?? DEFAULT_MAX_CASE_UPLOAD_BYTES;
+
+  if (resolvedMaxCaseUploadBytes < resolvedMaxUploadBytes) {
+    throw new Error(
+      "WATCH_MAX_CASE_UPLOAD_BYTES must be greater than or equal to WATCH_MAX_UPLOAD_BYTES.",
+    );
+  }
+
   return {
     envFileValues,
     persistenceMode,
     persistenceModeSource: persistenceModeValue ? "explicit" : "default",
+    fileStorageMode,
     databaseUrl,
     sqliteDbPath,
     configuredDbPath,
@@ -182,7 +209,8 @@ export function resolveWatchConfig({
     uploadDirectoryValue,
     uploadPublicBasePath,
     maxDocuments: maxDocuments ?? DEFAULT_MAX_DOCUMENTS,
-    maxUploadBytes: maxUploadBytes ?? DEFAULT_MAX_UPLOAD_BYTES,
+    maxUploadBytes: resolvedMaxUploadBytes,
+    maxCaseUploadBytes: resolvedMaxCaseUploadBytes,
     allowedUploadMimeTypes,
   };
 }

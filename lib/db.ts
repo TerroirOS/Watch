@@ -5,14 +5,14 @@ import path from "path";
 import { Pool, type PoolClient } from "pg";
 import { getWatchConfig } from "@/lib/env";
 
-type SqlValue = string | number | null | Uint8Array;
-type QueryRow = object;
+export type SqlValue = string | number | null | Uint8Array;
+export type QueryRow = object;
 
-interface QueryResult<TRow extends QueryRow> {
+export interface QueryResult<TRow extends QueryRow> {
   rows: TRow[];
 }
 
-interface MutationResult {
+export interface MutationResult {
   rowCount: number;
 }
 
@@ -23,7 +23,7 @@ interface DatabaseAdapterInfo {
   hasDatabaseUrl: boolean;
 }
 
-interface DatabaseExecutor {
+export interface DatabaseExecutor {
   query<TRow extends QueryRow = QueryRow>(
     sql: string,
     params?: readonly SqlValue[],

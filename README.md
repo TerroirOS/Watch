@@ -61,17 +61,20 @@ DATABASE_URL=
 OPENAI_API_KEY=sk-...
 WATCH_USE_MOCK_AI=true
 WATCH_OPENAI_MODEL=gpt-4o
+WATCH_FILE_STORAGE=local
 WATCH_UPLOAD_DIR=./uploads
 WATCH_UPLOAD_PUBLIC_BASE=/uploads
 WATCH_MAX_DOCUMENTS=5
 WATCH_MAX_UPLOAD_BYTES=10485760
+WATCH_MAX_CASE_UPLOAD_BYTES=26214400
 WATCH_ALLOWED_UPLOAD_MIME_TYPES=application/pdf,application/json
 ```
 
 `WATCH_PERSISTENCE_MODE` defaults to `sqlite` even when `DATABASE_URL` is present. Set it to `postgres` explicitly only when you want the app to use PostgreSQL.
 `OPENAI_API_KEY` is optional when `WATCH_USE_MOCK_AI=true` or omitted.
+`WATCH_FILE_STORAGE` currently supports `local`, which writes source files to the configured uploads directory behind a storage abstraction that can be swapped later.
 `WATCH_DB_PATH` defaults to `./watch.db`.
-`WATCH_MAX_DOCUMENTS` defaults to 5 and `WATCH_MAX_UPLOAD_BYTES` defaults to 10 MB per file.
+`WATCH_MAX_DOCUMENTS` defaults to 5, `WATCH_MAX_UPLOAD_BYTES` defaults to 10 MB per file, and `WATCH_MAX_CASE_UPLOAD_BYTES` defaults to 25 MB across the full case submission.
 `WATCH_ALLOWED_UPLOAD_MIME_TYPES` defaults to PDFs and JSON records.
 
 ### 4. Initialize the local database
@@ -108,6 +111,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `/cases` | All Watch cases |
 | `/cases/new` | Upload documents and open a new case |
 | `/cases/[id]` | Watch Report for a specific case |
+| `/uploads/[caseId]/[filename]` | Serves a stored source document for a case |
 | `/schema` | Public data model and discrepancy taxonomy docs |
 | `POST /api/cases/upload` | Create a case, process documents, and run AI analysis |
 | `GET /api/cases` | JSON list of all cases |

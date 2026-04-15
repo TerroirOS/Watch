@@ -1,0 +1,16 @@
+services:
+  shield-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      WATCH_DB_PATH: /app/watch.db
+      WATCH_USE_MOCK_AI: "true"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - shield-data:/app/data
+
+volumes:
+  shield-data:

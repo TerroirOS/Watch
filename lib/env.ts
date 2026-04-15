@@ -3,14 +3,18 @@ import path from "path";
 const DEFAULT_SQLITE_DB_FILENAME = "watch.db";
 const DEFAULT_UPLOAD_DIRECTORY = "uploads";
 const DEFAULT_PUBLIC_UPLOAD_PATH = "/uploads";
+const DEFAULT_FILE_STORAGE = "local";
 const DEFAULT_MAX_DOCUMENTS = 5;
 const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const DEFAULT_MAX_CASE_UPLOAD_BYTES = 25 * 1024 * 1024;
 const DEFAULT_ALLOWED_UPLOAD_MIME_TYPES = ["application/pdf", "application/json"];
 const DEFAULT_OPENAI_MODEL = "gpt-4o";
 const WATCH_PERSISTENCE_MODES = ["sqlite", "postgres"] as const;
+const WATCH_FILE_STORAGE_MODES = ["local"] as const;
 
 type WatchPersistenceMode = (typeof WATCH_PERSISTENCE_MODES)[number];
 type WatchPersistenceModeSource = "default" | "explicit";
+type WatchFileStorageMode = (typeof WATCH_FILE_STORAGE_MODES)[number];
 
 function readStringEnv(name: string, env = process.env): string | undefined {
   const value = env[name]?.trim();
@@ -46,6 +50,7 @@ function readIntegerEnv(name: string, env = process.env): number | undefined {
 export interface WatchConfig {
   persistenceMode: WatchPersistenceMode;
   persistenceModeSource: WatchPersistenceModeSource;
+  fileStorageMode: WatchFileStorageMode;
   databaseUrl?: string;
   sqliteDbPath: string;
   useMockAi: boolean;
@@ -55,6 +60,7 @@ export interface WatchConfig {
   uploadPublicBasePath: string;
   maxDocuments: number;
   maxUploadBytes: number;
+  maxCaseUploadBytes: number;
   allowedUploadMimeTypes: string[];
 }
 
@@ -70,10 +76,20 @@ export function getWatchConfig(env = process.env): WatchConfig {
   const persistenceModeValue = readStringEnv("WATCH_PERSISTENCE_MODE", env);
   const databaseUrl = readStringEnv("DATABASE_URL", env);
   const persistenceMode = (persistenceModeValue ?? "sqlite") as WatchPersistenceMode | string;
+  const fileStorageModeValue = readStringEnv("WATCH_FILE_STORAGE", env);
+  const fileStorageMode = (fileStorageModeValue ?? DEFAULT_FILE_STORAGE) as
+    | WatchFileStorageMode
+    | string;
 
   if (!WATCH_PERSISTENCE_MODES.includes(persistenceMode as WatchPersistenceMode)) {
     throw new Error(
       `WATCH_PERSISTENCE_MODE must be one of: ${WATCH_PERSISTENCE_MODES.join(", ")}.`,
+    );
+  }
+
+  if (!WATCH_FILE_STORAGE_MODES.includes(fileStorageMode as WatchFileStorageMode)) {
+    throw new Error(
+      `WATCH_FILE_STORAGE must be one of: ${WATCH_FILE_STORAGE_MODES.join(", ")}.`,
     );
   }
 
@@ -102,6 +118,14 @@ export function getWatchConfig(env = process.env): WatchConfig {
     throw new Error("WATCH_MAX_UPLOAD_BYTES must be a positive whole number.");
   }
 
+  const maxCaseUploadBytes = readIntegerEnv("WATCH_MAX_CASE_UPLOAD_BYTES", env);
+  if (
+    readStringEnv("WATCH_MAX_CASE_UPLOAD_BYTES", env) !== undefined &&
+    maxCaseUploadBytes === undefined
+  ) {
+    throw new Error("WATCH_MAX_CASE_UPLOAD_BYTES must be a positive whole number.");
+  }
+
   const uploadPublicBasePath =
     readStringEnv("WATCH_UPLOAD_PUBLIC_BASE", env) ?? DEFAULT_PUBLIC_UPLOAD_PATH;
   if (!uploadPublicBasePath.startsWith("/")) {
@@ -122,6 +146,7 @@ export function getWatchConfig(env = process.env): WatchConfig {
   const config: WatchConfig = {
     persistenceMode: persistenceMode as WatchPersistenceMode,
     persistenceModeSource: persistenceModeValue ? "explicit" : "default",
+    fileStorageMode: fileStorageMode as WatchFileStorageMode,
     databaseUrl,
     sqliteDbPath: path.resolve(
       process.cwd(),
@@ -137,6 +162,7 @@ export function getWatchConfig(env = process.env): WatchConfig {
     uploadPublicBasePath,
     maxDocuments: maxDocuments ?? DEFAULT_MAX_DOCUMENTS,
     maxUploadBytes: maxUploadBytes ?? DEFAULT_MAX_UPLOAD_BYTES,
+    maxCaseUploadBytes: maxCaseUploadBytes ?? DEFAULT_MAX_CASE_UPLOAD_BYTES,
     allowedUploadMimeTypes,
   };
 
@@ -146,6 +172,10 @@ export function getWatchConfig(env = process.env): WatchConfig {
 
   if (config.maxUploadBytes < 1) {
     throw new Error("WATCH_MAX_UPLOAD_BYTES must be at least 1.");
+  }
+
+  if (config.maxCaseUploadBytes < config.maxUploadBytes) {
+    throw new Error("WATCH_MAX_CASE_UPLOAD_BYTES must be greater than or equal to WATCH_MAX_UPLOAD_BYTES.");
   }
 
   if (env === process.env) {

@@ -4,6 +4,7 @@ import { pathToFileURL } from "url";
 import {
   DEFAULT_ALLOWED_UPLOAD_MIME_TYPES,
   DEFAULT_MAX_DOCUMENTS,
+  DEFAULT_MAX_CASE_UPLOAD_BYTES,
   DEFAULT_MAX_UPLOAD_BYTES,
   parseDotEnv,
   resolveWatchConfig,
@@ -47,6 +48,7 @@ export function auditEnvironment({
   logger.log(`- Node.js: ${process.versions.node}`);
   logger.log(`- Persistence mode: ${watchConfig.persistenceMode}`);
   logger.log(`- Persistence selection: ${watchConfig.persistenceModeSource}`);
+  logger.log(`- File storage mode: ${watchConfig.fileStorageMode}`);
   if (watchConfig.persistenceMode === "postgres") {
     logger.log(`- PostgreSQL URL configured: ${watchConfig.databaseUrl ? "yes" : "no"}`);
   } else {
@@ -68,7 +70,7 @@ export function auditEnvironment({
   logger.log(`- Upload storage directory: ${watchConfig.uploadDirectory}`);
   logger.log(`- Upload public base path: ${watchConfig.uploadPublicBasePath}`);
   logger.log(
-    `- Upload limits: ${watchConfig.maxDocuments} document(s) per case, ${watchConfig.maxUploadBytes} byte(s) per file`,
+    `- Upload limits: ${watchConfig.maxDocuments} document(s) per case, ${watchConfig.maxUploadBytes} byte(s) per file, ${watchConfig.maxCaseUploadBytes} byte(s) per case`,
   );
   logger.log(
     `- Allowed upload MIME types: ${watchConfig.allowedUploadMimeTypes.join(", ")}`,
@@ -105,6 +107,10 @@ export function auditEnvironment({
 
   if (watchConfig.maxUploadBytes !== DEFAULT_MAX_UPLOAD_BYTES) {
     logger.log("- Custom upload byte limit active via WATCH_MAX_UPLOAD_BYTES.");
+  }
+
+  if (watchConfig.maxCaseUploadBytes !== DEFAULT_MAX_CASE_UPLOAD_BYTES) {
+    logger.log("- Custom aggregate upload limit active via WATCH_MAX_CASE_UPLOAD_BYTES.");
   }
 
   if (

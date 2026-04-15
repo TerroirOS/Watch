@@ -128,12 +128,21 @@ runTest("sqlite migrations create schema metadata and are idempotent", () => {
 
   assert.equal(firstRun.latestVersion, getLatestSchemaVersion());
   assert.equal(secondRun.latestVersion, getLatestSchemaVersion());
-  assert.deepEqual(firstRun.appliedVersions, [1]);
-  assert.deepEqual(secondRun.appliedVersions, [1]);
-  assert.deepEqual(migrationRows, [{ version: 1, name: "initial_watch_schema" }]);
+  assert.deepEqual(firstRun.appliedVersions, [1, 2]);
+  assert.deepEqual(secondRun.appliedVersions, [1, 2]);
+  assert.deepEqual(migrationRows, [
+    { version: 1, name: "initial_watch_schema" },
+    { version: 2, name: "case_audit_log" },
+  ]);
   assert.equal(
     db.prepare(
       "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'cases'",
+    ).get().count,
+    1,
+  );
+  assert.equal(
+    db.prepare(
+      "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'audit_logs'",
     ).get().count,
     1,
   );
@@ -159,8 +168,17 @@ runTest("sqlite migrations baseline an existing pre-migration schema", () => {
     .all();
 
   assert.equal(result.latestVersion, getLatestSchemaVersion());
-  assert.deepEqual(result.appliedVersions, [1]);
-  assert.deepEqual(migrationRows, [{ version: 1, name: "initial_watch_schema" }]);
+  assert.deepEqual(result.appliedVersions, [1, 2]);
+  assert.deepEqual(migrationRows, [
+    { version: 1, name: "initial_watch_schema" },
+    { version: 2, name: "case_audit_log" },
+  ]);
+  assert.equal(
+    db.prepare(
+      "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'audit_logs'",
+    ).get().count,
+    1,
+  );
 
   db.close();
 });
@@ -172,13 +190,31 @@ runTest("watch config parses upload limits and MIME types", () => {
     env: {
       WATCH_MAX_DOCUMENTS: "3",
       WATCH_MAX_UPLOAD_BYTES: "2048",
+      WATCH_MAX_CASE_UPLOAD_BYTES: "4096",
       WATCH_ALLOWED_UPLOAD_MIME_TYPES: "application/pdf,text/plain",
     },
   });
 
   assert.equal(config.maxDocuments, 3);
   assert.equal(config.maxUploadBytes, 2048);
+  assert.equal(config.maxCaseUploadBytes, 4096);
   assert.deepEqual(config.allowedUploadMimeTypes, ["application/pdf", "text/plain"]);
+});
+
+runTest("watch config rejects aggregate upload limits below the per-file limit", () => {
+  const workspace = createFixtureWorkspace();
+
+  assert.throws(
+    () =>
+      resolveWatchConfig({
+        cwd: workspace,
+        env: {
+          WATCH_MAX_UPLOAD_BYTES: "2048",
+          WATCH_MAX_CASE_UPLOAD_BYTES: "1024",
+        },
+      }),
+    /WATCH_MAX_CASE_UPLOAD_BYTES must be greater than or equal to WATCH_MAX_UPLOAD_BYTES\./,
+  );
 });
 
 runTest("document parsing normalizes filenames and whitespace", () => {
@@ -244,7 +280,7 @@ runTest("sqlite migrations are versioned and idempotent", () => {
     assert.equal(firstRun.latestVersion, getLatestSchemaVersion());
     assert.deepEqual(
       firstRun.appliedMigrations.map((migration) => migration.version),
-      [1],
+      [1, 2],
     );
 
     const secondRun = applySqliteMigrations({
