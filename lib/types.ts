@@ -1,19 +1,11 @@
 export type Severity = "low" | "medium" | "high";
-export type CaseStatus =
-  | "open"
-  | "under_review"
-  | "on_hold"
-  | "escalated"
-  | "approved"
-  | "rejected"
-  | "exported";
 
 export interface CaseRecord {
   id: string;
   title: string;
   description: string | null;
   ai_summary: string | null;
-  status: CaseStatus | null;
+  status: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -47,22 +39,11 @@ export interface DiscrepancyRecord {
   created_at: string;
 }
 
-export interface AuditLogRecord {
-  id: string;
-  case_id: string;
-  event_type: string;
-  actor_type: string;
-  actor_id: string | null;
-  message: string;
-  metadata_json: string | null;
-  created_at: string;
-}
-
 export interface CaseListItem {
   id: string;
   title: string;
   description: string | null;
-  status: CaseStatus | null;
+  status: string | null;
   created_at: string;
   document_count: number;
   discrepancy_count: number;

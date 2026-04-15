@@ -105,40 +105,6 @@ export const WATCH_MIGRATIONS = [
       );
     `,
   },
-  {
-    version: 2,
-    name: "case_audit_log",
-    sqliteSql: `
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id TEXT PRIMARY KEY DEFAULT (gen_random_uuid()),
-        case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
-        event_type TEXT NOT NULL,
-        actor_type TEXT NOT NULL DEFAULT 'system',
-        actor_id TEXT,
-        message TEXT NOT NULL,
-        metadata_json TEXT,
-        created_at TEXT DEFAULT (datetime('now'))
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_audit_logs_case_id_created_at
-        ON audit_logs(case_id, created_at DESC);
-    `,
-    postgresSql: `
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        case_id UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
-        event_type TEXT NOT NULL,
-        actor_type TEXT NOT NULL DEFAULT 'system',
-        actor_id TEXT,
-        message TEXT NOT NULL,
-        metadata_json JSONB,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_audit_logs_case_id_created_at
-        ON audit_logs(case_id, created_at DESC);
-    `,
-  },
 ];
 
 function listPendingMigrations(appliedVersions) {

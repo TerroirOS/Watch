@@ -1,37 +1,22 @@
-import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 export type ApiErrorCode =
   | "validation_error"
   | "unsupported_media_type"
   | "payload_too_large"
-  | "not_found"
-  | "storage_error"
   | "database_error"
   | "configuration_error"
   | "internal_error";
 
-export type ApiErrorCategory =
-  | "validation"
-  | "storage"
-  | "dependency"
-  | "configuration"
-  | "internal";
-
 export interface ApiErrorShape {
   code: ApiErrorCode;
   message: string;
-  category: ApiErrorCategory;
-  requestId: string;
-  retryable: boolean;
   details?: Record<string, unknown>;
 }
 
 export class AppError extends Error {
   readonly status: number;
   readonly code: ApiErrorCode;
-  readonly category: ApiErrorCategory;
-  readonly retryable: boolean;
   readonly details?: Record<string, unknown>;
 
   constructor(
@@ -39,8 +24,6 @@ export class AppError extends Error {
     options: {
       status: number;
       code: ApiErrorCode;
-      category?: ApiErrorCategory;
-      retryable?: boolean;
       details?: Record<string, unknown>;
     },
   ) {
@@ -48,8 +31,6 @@ export class AppError extends Error {
     this.name = "AppError";
     this.status = options.status;
     this.code = options.code;
-    this.category = options.category ?? "internal";
-    this.retryable = options.retryable ?? false;
     this.details = options.details;
   }
 }
@@ -74,37 +55,16 @@ function isConfigurationError(error: Error): boolean {
   );
 }
 
-function isStorageError(error: Error): boolean {
-  const message = error.message.toLowerCase();
-  return (
-    message.includes("uploads directory") ||
-    message.includes("storage path") ||
-    message.includes("enoent") ||
-    message.includes("eacces")
-  );
-}
-
 export function normalizeApiError(
   error: unknown,
-  fallback: {
-    code: ApiErrorCode;
-    message: string;
-    status?: number;
-    category?: ApiErrorCategory;
-    retryable?: boolean;
-  },
+  fallback: { code: ApiErrorCode; message: string; status?: number },
 ): { status: number; error: ApiErrorShape } {
-  const requestId = randomUUID();
-
   if (error instanceof AppError) {
     return {
       status: error.status,
       error: {
         code: error.code,
         message: error.message,
-        category: error.category,
-        requestId,
-        retryable: error.retryable,
         ...(error.details ? { details: error.details } : {}),
       },
     };
@@ -117,25 +77,6 @@ export function normalizeApiError(
         error: {
           code: "configuration_error",
           message: error.message,
-          category: "configuration",
-          requestId,
-          retryable: false,
-        },
-      };
-    }
-
-    if (isStorageError(error)) {
-      return {
-        status: 500,
-        error: {
-          code: "storage_error",
-          message: fallback.message,
-          category: "storage",
-          requestId,
-          retryable: true,
-          details: {
-            reason: error.message,
-          },
         },
       };
     }
@@ -146,12 +87,6 @@ export function normalizeApiError(
         error: {
           code: "database_error",
           message: fallback.message,
-          category: "dependency",
-          requestId,
-          retryable: true,
-          details: {
-            reason: error.message,
-          },
         },
       };
     }
@@ -161,9 +96,6 @@ export function normalizeApiError(
       error: {
         code: fallback.code,
         message: error.message || fallback.message,
-        category: fallback.category ?? "internal",
-        requestId,
-        retryable: fallback.retryable ?? false,
       },
     };
   }
@@ -173,33 +105,16 @@ export function normalizeApiError(
     error: {
       code: fallback.code,
       message: fallback.message,
-      category: fallback.category ?? "internal",
-      requestId,
-      retryable: fallback.retryable ?? false,
     },
   };
 }
 
 export function createApiErrorResponse(
   error: unknown,
-  fallback: {
-    code: ApiErrorCode;
-    message: string;
-    status?: number;
-    category?: ApiErrorCategory;
-    retryable?: boolean;
-  },
+  fallback: { code: ApiErrorCode; message: string; status?: number },
 ) {
   const normalized = normalizeApiError(error, fallback);
-  return NextResponse.json(
-    { error: normalized.error },
-    {
-      status: normalized.status,
-      headers: {
-        "x-request-id": normalized.error.requestId,
-      },
-    },
-  );
+  return NextResponse.json({ error: normalized.error }, { status: normalized.status });
 }
 
 export function getErrorMessage(error: unknown, fallback: string): string {

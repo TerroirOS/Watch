@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <div className="container" style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Header handled by global nav */}
-
+      
       <main style={{ flex: 1, padding: "80px 0", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
         <p style={{
           fontSize: "12px",
@@ -16,7 +16,7 @@ export default function Home() {
         }}>
           Open-Source Accountability
         </p>
-
+        
         <h2 style={{
           fontSize: "clamp(2.5rem, 5vw, 4rem)",
           lineHeight: 1.1,
@@ -25,7 +25,7 @@ export default function Home() {
         }}>
           An AI transparency engine for agricultural origin claims.
         </h2>
-
+        
         <p style={{
           fontSize: "1.2rem",
           color: "var(--color-text-secondary)",
@@ -34,7 +34,7 @@ export default function Home() {
         }}>
           Watch compares certification records, shipment data, and public documents to flag inconsistencies and surface risk, making institutional decisions understandable to producers, buyers, and the public.
         </p>
-
+        
         <div style={{ display: "flex", gap: "16px" }}>
           <Link href="/cases/new" style={{
             display: "inline-flex",
@@ -65,9 +65,9 @@ export default function Home() {
           </Link>
         </div>
       </main>
-
+      
       <footer style={{ padding: "40px 0", borderTop: "1px solid var(--color-border)", textAlign: "center", fontSize: "0.9rem", color: "var(--color-text-secondary)" }}>
-        <p>Copyright {new Date().getFullYear()} Terroir Watch - Open Source Ecosystem</p>
+        <p>© {new Date().getFullYear()} Terroir Watch — Open Source Ecosystem</p>
       </footer>
     </div>
   );
